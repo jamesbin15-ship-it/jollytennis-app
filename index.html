@@ -71,4 +71,11 @@ $('tabs').onclick=e=>{let b=e.target.closest('.tab');if(!b)return;document.query
 <script>
 (()=>{const openPasswordPrompt=openFirebase;openFirebase=function(){openPasswordPrompt();let input=$('clubId');input.type='password';input.autocomplete='current-password';input.placeholder='공유 코드를 입력하세요';input.previousElementSibling.textContent='공유 코드';setTimeout(()=>input.focus(),0)};let saved=null;try{saved=JSON.parse(localStorage.getItem(CFG)||'null')}catch{}let code=String(saved?.clubId||'').trim();if(!code){openFirebase()}let input=$('clubId');input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveFirebase()}})})();
 </script>
+<script>
+(()=>{let saved=null;try{saved=JSON.parse(localStorage.getItem(CFG)||'null')}catch{}if(!String(saved?.clubId||'').trim()){let modal=$('firebaseModal'),dialog=modal.querySelector('.dialog'),buttons=dialog.querySelectorAll('.actions button');dialog.querySelector('h2').textContent='공유 코드 입력';dialog.querySelector('.notice').textContent='졸리 테니스클럽 매치센터에 연결하려면 공유 코드를 입력하세요. 이 기기에 한 번 저장하면 다음 접속부터 자동으로 연결됩니다.';$('fbMessage').textContent='';if(buttons[1])buttons[1].style.display='none';if(buttons[2])buttons[2].style.display='none';modal.classList.add('open')}})();
+</script>
+<style>@keyframes codeShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}.code-error{color:#c62838!important;background:#fff0f1;border:1px solid #f1a7ae;border-radius:8px;padding:9px 11px;font-weight:800;animation:codeShake .25s ease}</style>
+<script>
+(()=>{const connectWithCodeCheck=saveFirebase;saveFirebase=async function(){let input=$('clubId'),code=input.value.trim(),message=$('fbMessage');message.classList.remove('code-error');if(code!=='clubjolly'){message.textContent='공유 코드가 올바르지 않습니다. 다시 확인해 주세요.';message.classList.add('code-error');input.value='';input.focus();return}message.textContent='공유 코드 확인 완료. Firebase에 연결 중...';await connectWithCodeCheck()}})();
+</script>
 </body></html>
