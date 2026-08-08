@@ -1,4 +1,4 @@
-<!doctype html>  
+<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#176b51"><title>테니스 복식 매치센터</title>
 <style>
@@ -77,5 +77,21 @@ $('tabs').onclick=e=>{let b=e.target.closest('.tab');if(!b)return;document.query
 <style>@keyframes codeShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}.code-error{color:#c62838!important;background:#fff0f1;border:1px solid #f1a7ae;border-radius:8px;padding:9px 11px;font-weight:800;animation:codeShake .25s ease}</style>
 <script>
 (()=>{const connectWithCodeCheck=saveFirebase;saveFirebase=async function(){let input=$('clubId'),code=input.value.trim(),message=$('fbMessage');message.classList.remove('code-error');if(code!=='clubjolly'){message.textContent='공유 코드가 올바르지 않습니다. 다시 확인해 주세요.';message.classList.add('code-error');input.value='';input.focus();return}message.textContent='공유 코드 확인 완료. Firebase에 연결 중...';await connectWithCodeCheck()}})();
+</script>
+<style>.player-style{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}.player-style select{padding:8px 6px;font-size:12px;background:var(--card)}@media(max-width:560px){.player-style{grid-template-columns:1fr}}</style>
+<script>
+(()=>{const slots=['a1','a2','b1','b2'];const handOptions='<option value="R">오른손</option><option value="L">왼손</option>';const backOptions='<option value="two">양손 백핸드</option><option value="one">원핸드 백핸드</option>';for(const slot of slots){let nameInput=$(slot),wrap=document.createElement('div');wrap.className='player-style';wrap.innerHTML=`<select id="${slot}Hand" aria-label="${slot} 주사용 손" required>${handOptions}</select><select id="${slot}Backhand" aria-label="${slot} 백핸드" required>${backOptions}</select>`;nameInput.insertAdjacentElement('afterend',wrap)}
+function latestStyle(name){name=clean(name);for(let i=matches.length-1;i>=0;i--){let m=matches[i];for(const slot of slots)if(clean(m[slot])===name&&m[slot+'Hand'])return{hand:m[slot+'Hand'],backhand:m[slot+'Backhand']||'two'}}return{hand:'R',backhand:'two'}}
+function fillStyle(slot,match=null){let style=match?{hand:match[slot+'Hand']||'R',backhand:match[slot+'Backhand']||'two'}:latestStyle($(slot).value);$(slot+'Hand').value=style.hand;$(slot+'Backhand').value=style.backhand}
+for(const slot of slots){$(slot).addEventListener('change',()=>fillStyle(slot));$(slot).addEventListener('blur',()=>fillStyle(slot))}
+let pendingStyles=null;$('matchForm').addEventListener('submit',()=>{pendingStyles=Object.fromEntries(slots.map(slot=>[slot,{name:clean($(slot).value),hand:$(slot+'Hand').value,backhand:$(slot+'Backhand').value}]))},{capture:true});
+const commitWithStyles=commit;commit=async function(){if(pendingStyles){let target=[...matches].sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0];if(target)for(const slot of slots){let x=pendingStyles[slot];if(clean(target[slot])===x.name){target[slot+'Hand']=x.hand;target[slot+'Backhand']=x.backhand}}pendingStyles=null}await commitWithStyles()};
+const editWithStyles=editMatch;editMatch=function(id){editWithStyles(id);let m=matches.find(x=>x.id===id);if(m)for(const slot of slots)fillStyle(slot,m)};
+const resetWithStyles=resetForm;resetForm=function(){resetWithStyles();for(const slot of slots){$(slot+'Hand').value='R';$(slot+'Backhand').value='two'}};
+})();
+</script>
+<style>.style-cell{display:flex;gap:5px;justify-content:center}.style-badge{display:inline-block;padding:4px 7px;border-radius:99px;background:#e8f6f0;color:#176b51;font-size:11px;font-weight:800;border:1px solid #bde2d2}.dark .style-badge{background:#173c2e;color:#92e4c0;border-color:#32624f}.style-missing{color:var(--muted);font-size:12px}</style>
+<script>
+(()=>{let head=$('playerRows').closest('table').querySelector('thead tr');if(![...head.cells].some(x=>x.textContent==='선수 스타일')){let th=document.createElement('th');th.textContent='선수 스타일';head.insertBefore(th,head.cells[2])}function rankingStyle(name){let found=null;for(const m of matches)for(const slot of ['a1','a2','b1','b2'])if(clean(m[slot])===name&&m[slot+'Hand']){let time=String(m.updatedAt||m.createdAt||m.date||'');if(!found||time>=found.time)found={time,hand:m[slot+'Hand'],backhand:m[slot+'Backhand']||'two'}}return found}renderPlayers=function(){let min=+$('minGames').value||1,arr=Object.values(stats).filter(x=>x.g>=min).sort((a,b)=>(b.pts-a.pts)||((b.w/b.g)-(a.w/a.g))||(b.w-a.w)||(b.d-a.d)||(b.elo-a.elo)||a.p.localeCompare(b.p,'ko'));$('playerRows').innerHTML=arr.length?arr.map((x,i)=>{let s=rankingStyle(x.p),style=s?`<div class="style-cell"><span class="style-badge">${s.hand==='L'?'왼손':'오른손'}</span><span class="style-badge">${s.backhand==='one'?'원핸드':'양손'} 백핸드</span></div>`:'<span class="style-missing">미등록</span>';return`<tr><td>${i+1}</td><td class="left"><b>${esc(x.p)}</b></td><td>${style}</td><td><b>${x.pts>0?'+':''}${x.pts}</b></td><td>${x.g}</td><td>${x.w}-${x.l}</td><td>${(x.w/x.g*100).toFixed(1)}%</td><td>${x.d>0?'+':''}${x.d}</td><td>${Math.round(x.elo)}</td><td>${x.streak?`${Math.abs(x.streak)}${x.streak>0?'연승':'연패'}`:'-'}</td></tr>`}).join(''):'<tr><td colspan="10" class="empty">조건에 맞는 선수가 없습니다.</td></tr>'};renderPlayers()})();
 </script>
 </body></html>
