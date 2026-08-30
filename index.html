@@ -218,4 +218,27 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
   };
 })();
 </script>
+<style>.schedule-final-rest td{background:#f2f8e9!important;color:#3f6d36;font-weight:800}.dark .schedule-final-rest td{background:#193627!important;color:#d6f5d2}</style>
+<script>
+(()=>{
+  let courts=$('scheduleCourts')?.closest('.field');
+  if(courts&&!$('scheduleRest')){
+    let field=document.createElement('div');field.className='field';
+    field.innerHTML='<label>마지막 휴식 시간(분)</label><input id="scheduleRest" type="number" min="0" max="180" value="0">';
+    courts.insertAdjacentElement('afterend',field);
+  }
+  const makeScheduleWithFinalRest=makeSchedule;
+  makeSchedule=function(){
+    makeScheduleWithFinalRest();
+    let restMins=Math.max(0,+$('scheduleRest')?.value||0),body=$('scheduleRows');
+    if(!restMins||!body||body.querySelector('.empty'))return;
+    let gameRows=[...body.querySelectorAll('tr')].filter(row=>!row.classList.contains('schedule-final-rest'));
+    if(!gameRows.length)return;
+    let lastRound=gameRows[gameRows.length-1].cells[0]?.textContent?.match(/(\d+)라운드/)?.[1]||'';
+    body.insertAdjacentHTML('beforeend',`<tr class="schedule-final-rest"><td><b>${lastRound?lastRound+'라운드 후':'경기 종료 후'}</b></td><td colspan="5">☕ 마지막 휴식 · ${restMins}분</td></tr>`);
+    let summary=$('scheduleSummary');
+    if(summary)summary.insertAdjacentHTML('beforeend',`<p class="notice">마지막 경기 후 휴식 시간: <b>${restMins}분</b> (경기 수에는 포함되지 않습니다.)</p>`);
+  };
+})();
+</script>
 </body></html>
