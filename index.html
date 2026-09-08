@@ -185,39 +185,135 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
 <script>
 (()=>{
   const slots=['a1','a2','b1','b2'];
-  const femalePlayers=new Set(['김동매','심효정','양지수','박혜수']);
-  function genderOf(player){let newest=null;for(const match of matches)for(const slot of slots)if(clean(match[slot])===clean(player)&&match[slot+'Gender']){let time=String(match.updatedAt||match.createdAt||match.date||'');if(!newest||time>=newest.time)newest={time,gender:match[slot+'Gender']}}return newest?.gender||(femalePlayers.has(clean(player))?'F':'M')}
-  function matchTypeFor(group){let females=group.filter(player=>genderOf(player)==='F').length;return females===0?'남복':females===4?'여복':females===2?'혼복':null}
+  const femalePlayers=new Set(['김동매','심효정','양지수','박혜수']); // 성별 정보 없는 선수 기본값 보정용
+  function genderOf(player){
+    let newest=null;
+    for(const match of matches) for(const slot of slots)
+      if(clean(match[slot])===clean(player)&&match[slot+'Gender']){
+        let time=String(match.updatedAt||match.createdAt||match.date||'');
+        if(!newest||time>=newest.time) newest={time,gender:match[slot+'Gender']};
+      }
+    return newest?.gender||(femalePlayers.has(clean(player))?'F':'M');
+  }
+
   makeSchedule=function(){
     calculate();
-    let selected=players().filter(player=>scheduleSelection?.has(player)),totalMins=+$('scheduleTotal').value,restMins=Math.max(0,+$('scheduleRest')?.value||0),mins=+$('scheduleMinutes').value,courts=+$('scheduleCourts').value,playableMins=totalMins-restMins;
-    if(selected.length<4)return alert('등록 선수 중 참여 선수를 4명 이상 선택하세요.');
-    if(playableMins<mins||mins<10||courts<1)return alert('총 경기시간에서 마지막 휴식 시간을 제외한 경기 가능 시간, 경기당 시간, 코트 수를 확인하세요.');
-    let rounds=Math.floor(playableMins/mins);if(rounds<1)return alert('휴식 시간을 제외한 시간 안에 편성할 수 있는 경기가 없습니다.');
-    let plays=Object.fromEntries(selected.map(player=>[player,0])),partner={},opponent={},quartet={},rows=[],partnerLimitReached=false;
-    const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,'ko')).join('|'),groupKey=group=>[...group].sort((a,b)=>a.localeCompare(b,'ko')).join('|'),rel=(map,a,b)=>map[pairKey(a,b)]||0,add=(map,a,b)=>map[pairKey(a,b)]=(map[pairKey(a,b)]||0)+1;
-    function pairingsFor(type,group){if(type==='혼복'){let men=group.filter(player=>genderOf(player)!=='F'),women=group.filter(player=>genderOf(player)==='F');return[[[men[0],women[0]],[men[1],women[1]]],[[men[0],women[1]],[men[1],women[0]]]]}return[[[group[0],group[1]],[group[2],group[3]]],[[group[0],group[2]],[group[1],group[3]]],[[group[0],group[3]],[group[1],group[2]]]]}
-    function hasNewPartners(type,group){return pairingsFor(type,group).some(teams=>rel(partner,...teams[0])===0&&rel(partner,...teams[1])===0)}
-    function candidates(pool){let men=pool.filter(player=>genderOf(player)!=='F'),women=pool.filter(player=>genderOf(player)==='F'),list=[];if(men.length>=4){let group=men.slice(0,4);if(hasNewPartners('남복',group))list.push({type:'남복',group})}if(women.length>=4){let group=women.slice(0,4);if(hasNewPartners('여복',group))list.push({type:'여복',group})}if(men.length>=2&&women.length>=2){let group=[...men.slice(0,2),...women.slice(0,2)];if(hasNewPartners('혼복',group))list.push({type:'혼복',group})}return list}
-    function bestPlan(pool,remaining){if(!remaining)return[];let list=candidates(pool);if(!list.length)return[];let best=[],bestPenalty=Infinity;for(const item of list){let rest=pool.filter(player=>!item.group.includes(player)),plan=[item,...bestPlan(rest,remaining-1)],penalty=plan.reduce((sum,x)=>sum+(quartet[groupKey(x.group)]||0)*10000+x.group.reduce((load,player)=>load+plays[player],0),0);if(plan.length>best.length||(plan.length===best.length&&penalty<bestPenalty)){best=plan;bestPenalty=penalty}}return best}
-    for(let round=0;round<rounds;round++){
+    let selected=players().filter(p=>scheduleSelection?.has(p));
+    let totalMins=+$('scheduleTotal').value;
+    let restMins=Math.max(0,+$('scheduleRest')?.value||0);
+    let mins=+$('scheduleMinutes').value;
+    let courts=+$('scheduleCourts').value;
+    let playableMins=totalMins-restMins;
+    if(selected.length<4) return alert('등록 선수 중 참여 선수를 4명 이상 선택하세요.');
+    if(playableMins<mins||mins<10||courts<1) return alert('총 경기시간에서 마지막 휴식 시간을 제외한 경기 가능 시간, 경기당 시간, 코트 수를 확인하세요.');
+    let rounds=Math.floor(playableMins/mins);
+    if(rounds<1) return alert('휴식 시간을 제외한 시간 안에 편성할 수 있는 경기가 없습니다.');
+
+    let plays=Object.fromEntries(selected.map(p=>[p,0]));
+    let metCount={}, partner={}, quartetHist={};
+    let rows=[], skippedCourts=0;
+
+    const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,'ko')).join('|');
+    const groupKey=g=>[...g].sort((a,b)=>a.localeCompare(b,'ko')).join('|');
+    const rel=(map,a,b)=>map[pairKey(a,b)]||0;
+    const add=(map,a,b)=>map[pairKey(a,b)]=(map[pairKey(a,b)]||0)+1;
+
+    function typeOf(group){
+      let men=group.filter(p=>genderOf(p)!=='F').length, women=group.length-men;
+      if(men===4) return '남복';
+      if(women===4) return '여복';
+      if(men===2&&women===2) return '혼복';
+      return null; // 잡복(3:1) 등은 무효 처리 → 후보에서 제외
+    }
+    function pairingsFor(type,group){
+      if(type==='혼복'){
+        let men=group.filter(p=>genderOf(p)!=='F'), women=group.filter(p=>genderOf(p)==='F');
+        return [[[men[0],women[0]],[men[1],women[1]]],[[men[0],women[1]],[men[1],women[0]]]];
+      }
+      return [[[group[0],group[1]],[group[2],group[3]]],[[group[0],group[2]],[group[1],group[3]]],[[group[0],group[3]],[group[1],group[2]]]];
+    }
+    function quartetMetSum(group){
+      let sum=0;
+      for(let i=0;i<4;i++) for(let j=i+1;j<4;j++) sum+=rel(metCount,group[i],group[j]);
+      return sum;
+    }
+    // 3단계(밸런스) > 4단계(재회피) 순으로 팀 분할 결정
+    function bestSplit(group){
+      let type=typeOf(group);
+      if(!type) return null;
+      let options=pairingsFor(type,group).map(teams=>{
+        let [A,B]=teams, probability=winProb(A,B);
+        return {type,teams,probability,
+          balanceGap:Math.abs(probability-.5),
+          repeatScore:rel(partner,...A)+rel(partner,...B)};
+      });
+      options.sort((a,b)=>(a.balanceGap-b.balanceGap)||(a.repeatScore-b.repeatScore));
+      return options[0];
+    }
+    // 코트 하나를 채울 최선의 4인 조합을 남은 인원 중에서 탐색 (2·3·4단계 동시 적용)
+    function bestQuartet(pool){
+      let best=null;
+      for(let i=0;i<pool.length;i++) for(let j=i+1;j<pool.length;j++)
+        for(let k=j+1;k<pool.length;k++) for(let l=k+1;l<pool.length;l++){
+          let group=[pool[i],pool[j],pool[k],pool[l]];
+          let split=bestSplit(group); // typeOf가 null이면 여기서 자동 제외(잡복 원천 차단)
+          if(!split) continue;
+          let score=split.balanceGap*1e6                          // 3순위: 밸런스 최우선
+                    +quartetMetSum(group)*10                       // 4순위: 파트너 포함 전체 재회피
+                    +(quartetHist[groupKey(group)]||0)*1e4;        // 동일 4인조 완전 재편성은 특히 회피
+          if(!best||score<best.score) best={group,split,score};
+        }
+      return best;
+    }
+
+    for(let round=0; round<rounds; round++){
+      // 1단계: 경기수가 적은 인원부터 이번 라운드 풀에 배정
       let ordered=[...selected].sort((a,b)=>(plays[a]-plays[b])||(((selected.indexOf(a)-round+selected.length)%selected.length)-((selected.indexOf(b)-round+selected.length)%selected.length)));
-      let plan=bestPlan(ordered,Math.min(courts,Math.floor(selected.length/4)));
-      if(!plan.length){partnerLimitReached=true;break}
-      let active=plan.flatMap(item=>item.group),rest=selected.filter(player=>!active.includes(player));
+      let slotCount=Math.min(courts, Math.floor(selected.length/4))*4;
+      let pool=ordered.slice(0,slotCount);
+      let bench=ordered.slice(slotCount);
+
+      // 1.5단계 보정: 남/여 인원이 홀수면(=잡복이 필연적으로 발생) 최소 피해로 1명 교체
+      let menCount=pool.filter(p=>genderOf(p)!=='F').length;
+      if(menCount%2!==0 && bench.length){
+        let outIdx=[...pool].map((p,i)=>i).sort((a,b)=>plays[pool[b]]-plays[pool[a]])
+          .find(i=>true); // 풀 안에서 가장 많이 뛴 인원부터 후보
+        for(const i of [...pool].map((_,i)=>i).sort((a,b)=>plays[pool[b]]-plays[pool[a]])){
+          let swapOutGender=genderOf(pool[i]);
+          let swapInIdx=bench.findIndex(p=>genderOf(p)!==swapOutGender);
+          if(swapInIdx>-1){ let tmp=pool[i]; pool[i]=bench[swapInIdx]; bench[swapInIdx]=tmp; break; }
+        }
+      }
+
+      let remain=[...pool], plan=[];
+      let courtSlots=Math.min(courts, Math.floor(pool.length/4));
+      for(let c=0;c<courtSlots;c++){
+        let picked=bestQuartet(remain);
+        if(!picked){ skippedCourts++; break; } // 유효 조합이 정말 없으면 그 코트는 비움
+        plan.push(picked);
+        remain=remain.filter(p=>!picked.group.includes(p));
+      }
+      let rest=selected.filter(p=>!plan.some(x=>x.group.includes(p)));
+
       plan.forEach((item,index)=>{
-        let q=item.group,sets=pairingsFor(item.type,q).filter(teams=>rel(partner,...teams[0])===0&&rel(partner,...teams[1])===0);
-        let rated=sets.map(teams=>{let repeats=rel(partner,...teams[0])+rel(partner,...teams[1]),opps=teams[0].reduce((sum,a)=>sum+teams[1].reduce((n,b)=>n+rel(opponent,a,b),0),0),probability=winProb(...teams),balanceGap=Math.abs(probability-.5);return{teams,probability,score:balanceGap*10000+repeats*100+opps*10}}).sort((a,b)=>a.score-b.score)[0],A=rated.teams[0],B=rated.teams[1];
-        q.forEach(player=>plays[player]++);quartet[groupKey(q)]=(quartet[groupKey(q)]||0)+1;add(partner,...A);add(partner,...B);for(const a of A)for(const b of B)add(opponent,a,b);
-        rows.push({round:round+1,time:`${round*mins}–${(round+1)*mins}분`,court:index+1,type:item.type,A,B,p:rated.probability,rest:rest.join(' · ')||'-'});
+        let {group,split}=item, [A,B]=split.teams;
+        group.forEach(p=>plays[p]++);
+        quartetHist[groupKey(group)]=(quartetHist[groupKey(group)]||0)+1;
+        add(partner,...A); add(partner,...B);
+        add(metCount,A[0],A[1]); add(metCount,B[0],B[1]);
+        for(const a of A) for(const b of B) add(metCount,a,b);
+        rows.push({round:round+1, time:`${round*mins}–${(round+1)*mins}분`, court:index+1, type:split.type, A, B, p:split.probability, rest:rest.join(' · ')||'-'});
       });
     }
+
     $('scheduleRows').innerHTML=rows.map(row=>`<tr><td><b>${row.round}라운드</b><br><span class="schedule-balance">${row.time}</span></td><td>${row.court}번</td><td><span class="badge">${row.type}</span><br><b>${esc(row.A.join(' · '))}</b></td><td><span class="badge">${(row.p*100).toFixed(0)}% : ${((1-row.p)*100).toFixed(0)}%</span></td><td><span class="badge">${row.type}</span><br><b>${esc(row.B.join(' · '))}</b></td><td>${row.court===1?esc(row.rest):''}</td></tr>`).join('');
-    let counts=Object.entries(plays).sort((a,b)=>b[1]-a[1]).map(([player,count])=>`${esc(player)} ${count}경기`).join(' · '),used=(rows.length?Math.max(...rows.map(row=>row.round)):0)*mins;
-    $('scheduleSummary').innerHTML=`<p class="notice"><b>남복 · 혼복 · 여복만 편성 · 승률 50:50 우선 · 복식 파트너 중복 없음 · ${rows.length}경기 · 경기 ${used}분 + 마지막 휴식 ${restMins}분 / 총 ${totalMins}분</b><br><span class="schedule-balance">${counts}</span></p>${partnerLimitReached?'<p class="notice">새 복식 파트너 조합이 더 이상 없어 남은 라운드는 편성하지 않았습니다. 파트너 중복은 만들지 않았습니다.</p>':''}`;
+    let counts=Object.entries(plays).sort((a,b)=>b[1]-a[1]).map(([p,c])=>`${esc(p)} ${c}경기`).join(' · ');
+    let used=(rows.length?Math.max(...rows.map(r=>r.round)):0)*mins;
+    $('scheduleSummary').innerHTML=`<p class="notice"><b>①인당 경기수 균등 → ②잡복 제외(남복·혼복·여복만) → ③랭킹 기반 50:50 밸런스 → ④파트너·4인 조합 재회피 순으로 편성 · ${rows.length}경기 · 경기 ${used}분 + 마지막 휴식 ${restMins}분 / 총 ${totalMins}분</b><br><span class="schedule-balance">${counts}</span></p>${skippedCourts?`<p class="notice">성비 문제로 잡복 없이 편성 불가능한 코트 ${skippedCourts}회는 비워졌습니다.</p>`:''}`;
   };
 })();
 </script>
+
 <style>.schedule-final-rest td{background:#f2f8e9!important;color:#3f6d36;font-weight:800}.dark .schedule-final-rest td{background:#193627!important;color:#d6f5d2}</style>
 <script>
 (()=>{
@@ -238,6 +334,124 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
     body.insertAdjacentHTML('beforeend',`<tr class="schedule-final-rest"><td><b>${lastRound?lastRound+'라운드 후':'경기 종료 후'}</b></td><td colspan="5">☕ 마지막 휴식 · ${restMins}분</td></tr>`);
     let summary=$('scheduleSummary');
     if(summary)summary.insertAdjacentHTML('beforeend',`<p class="notice">마지막 경기 후 휴식 시간: <b>${restMins}분</b> (경기 수에는 포함되지 않습니다.)</p>`);
+  };
+})();
+</script>
+<script>
+(()=>{
+  const slots=['a1','a2','b1','b2'];
+  const femalePlayers=new Set(['김동매','심효정','양지수','박혜수']);
+  function genderOf(player){
+    let newest=null;
+    for(const match of matches) for(const slot of slots)
+      if(clean(match[slot])===clean(player)&&match[slot+'Gender']){
+        let time=String(match.updatedAt||match.createdAt||match.date||'');
+        if(!newest||time>=newest.time) newest={time,gender:match[slot+'Gender']};
+      }
+    return newest?.gender||(femalePlayers.has(clean(player))?'F':'M');
+  }
+
+  makeSchedule=function(){
+    calculate();
+    let selected=players().filter(p=>scheduleSelection?.has(p));
+    let totalMins=+$('scheduleTotal').value;
+    let restMins=Math.max(0,+$('scheduleRest')?.value||0);
+    let mins=+$('scheduleMinutes').value;
+    let courts=+$('scheduleCourts').value;
+    let playableMins=totalMins-restMins;
+    if(selected.length<4) return alert('등록 선수 중 참여 선수를 4명 이상 선택하세요.');
+    if(playableMins<mins||mins<10||courts<1) return alert('총 경기시간에서 마지막 휴식 시간을 제외한 경기 가능 시간, 경기당 시간, 코트 수를 확인하세요.');
+    let rounds=Math.floor(playableMins/mins);
+    if(rounds<1) return alert('휴식 시간을 제외한 시간 안에 편성할 수 있는 경기가 없습니다.');
+
+    let plays=Object.fromEntries(selected.map(p=>[p,0]));
+    let metCount={};   // 파트너였든 상대였든, 두 사람이 같은 코트에서 마주친 모든 횟수
+    let partner={};    // 파트너로 만난 횟수(별도 관리, 가장 강하게 회피)
+    let quartet={};    // 동일 4인 조합이 통째로 재편성된 횟수
+    let rows=[], partnerLimitReached=false;
+
+    const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,'ko')).join('|');
+    const groupKey=group=>[...group].sort((a,b)=>a.localeCompare(b,'ko')).join('|');
+    const rel=(map,a,b)=>map[pairKey(a,b)]||0;
+    const add=(map,a,b)=>map[pairKey(a,b)]=(map[pairKey(a,b)]||0)+1;
+
+    function pairingsFor(type,group){
+      if(type==='혼복'){
+        let men=group.filter(p=>genderOf(p)!=='F'), women=group.filter(p=>genderOf(p)==='F');
+        return [[[men[0],women[0]],[men[1],women[1]]],[[men[0],women[1]],[men[1],women[0]]]];
+      }
+      return [[[group[0],group[1]],[group[2],group[3]]],[[group[0],group[2]],[group[1],group[3]]],[[group[0],group[3]],[group[1],group[2]]]];
+    }
+
+    // 파트너/상대를 모두 포함한 4인 그룹 내 6쌍 접촉 이력 합계
+    function quartetMetSum(group){
+      let sum=0;
+      for(let i=0;i<4;i++) for(let j=i+1;j<4;j++) sum+=rel(metCount,group[i],group[j]);
+      return sum;
+    }
+
+    // 팀 배정(A vs B) 하나에 대한 점수: 파트너 재사용 > 접촉 이력 > 승률 밸런스 순으로 회피
+    function splitScore(teams){
+      let [A,B]=teams;
+      let partnerRepeat=rel(partner,...A)+rel(partner,...B);
+      let probability=winProb(A,B);
+      let balanceGap=Math.abs(probability-.5);
+      return {teams,probability,
+        score: partnerRepeat*100000 + quartetMetSum([...A,...B])*1000 + balanceGap*100};
+    }
+
+    function candidates(pool){
+      let men=pool.filter(p=>genderOf(p)!=='F'), women=pool.filter(p=>genderOf(p)==='F'), list=[];
+      if(men.length>=4) list.push({type:'남복',group:men.slice(0,4)});
+      if(women.length>=4) list.push({type:'여복',group:women.slice(0,4)});
+      if(men.length>=2&&women.length>=2) list.push({type:'혼복',group:[...men.slice(0,2),...women.slice(0,2)]});
+      return list;
+    }
+
+    function bestPlan(pool,remaining){
+      if(!remaining) return [];
+      let list=candidates(pool);
+      if(!list.length) return [];
+      let best=[], bestPenalty=Infinity;
+      for(const item of list){
+        let rest=pool.filter(p=>!item.group.includes(p));
+        let plan=[item, ...bestPlan(rest,remaining-1)];
+        let penalty=plan.reduce((sum,x)=>{
+          let qKey=groupKey(x.group);
+          return sum
+            +(quartet[qKey]||0)*200000          // 동일 4인 조합 완전 재편성 : 가장 강한 페널티
+            +quartetMetSum(x.group)*2000         // 4인 사이 파트너/상대 접촉 이력 전체
+            +x.group.reduce((load,p)=>load+plays[p],0); // 경기 수 균형
+        },0);
+        if(plan.length>best.length||(plan.length===best.length&&penalty<bestPenalty)){
+          best=plan; bestPenalty=penalty;
+        }
+      }
+      return best;
+    }
+
+    for(let round=0; round<rounds; round++){
+      let ordered=[...selected].sort((a,b)=>(plays[a]-plays[b])||(((selected.indexOf(a)-round+selected.length)%selected.length)-((selected.indexOf(b)-round+selected.length)%selected.length)));
+      let plan=bestPlan(ordered, Math.min(courts, Math.floor(selected.length/4)));
+      if(!plan.length){ partnerLimitReached=true; break; }
+      let active=plan.flatMap(item=>item.group), rest=selected.filter(p=>!active.includes(p));
+      plan.forEach((item,index)=>{
+        let q=item.group;
+        let sets=pairingsFor(item.type,q).map(splitScore).sort((a,b)=>a.score-b.score);
+        let rated=sets[0], A=rated.teams[0], B=rated.teams[1];
+        q.forEach(p=>plays[p]++);
+        quartet[groupKey(q)]=(quartet[groupKey(q)]||0)+1;
+        add(partner,...A); add(partner,...B);
+        add(metCount,A[0],A[1]); add(metCount,B[0],B[1]);
+        for(const a of A) for(const b of B) add(metCount,a,b);
+        rows.push({round:round+1, time:`${round*mins}–${(round+1)*mins}분`, court:index+1, type:item.type, A, B, p:rated.probability, rest:rest.join(' · ')||'-'});
+      });
+    }
+
+    $('scheduleRows').innerHTML=rows.map(row=>`<tr><td><b>${row.round}라운드</b><br><span class="schedule-balance">${row.time}</span></td><td>${row.court}번</td><td><span class="badge">${row.type}</span><br><b>${esc(row.A.join(' · '))}</b></td><td><span class="badge">${(row.p*100).toFixed(0)}% : ${((1-row.p)*100).toFixed(0)}%</span></td><td><span class="badge">${row.type}</span><br><b>${esc(row.B.join(' · '))}</b></td><td>${row.court===1?esc(row.rest):''}</td></tr>`).join('');
+    let counts=Object.entries(plays).sort((a,b)=>b[1]-a[1]).map(([p,c])=>`${esc(p)} ${c}경기`).join(' · ');
+    let used=(rows.length?Math.max(...rows.map(r=>r.round)):0)*mins;
+    $('scheduleSummary').innerHTML=`<p class="notice"><b>남복 · 혼복 · 여복만 편성 · 4인 조합·파트너·상대 중복 최소화 · 승률 50:50 우선 · ${rows.length}경기 · 경기 ${used}분 + 마지막 휴식 ${restMins}분 / 총 ${totalMins}분</b><br><span class="schedule-balance">${counts}</span></p>${partnerLimitReached?'<p class="notice">더 이상 새로운 조합을 만들 수 없어 남은 라운드는 편성하지 않았습니다.</p>':''}`;
   };
 })();
 </script>
