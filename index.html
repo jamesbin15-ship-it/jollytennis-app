@@ -39,7 +39,7 @@ function renderSchedulePlayers(){let box=$('schedulePlayers');if(!box)return;let
 function toggleSchedulePlayer(el){let p=el.dataset.player;if(el.checked)scheduleSelection.add(p);else scheduleSelection.delete(p)}
 function selectAllSchedule(on){scheduleSelection=new Set(on?players():[]);renderSchedulePlayers()}
 function clockMinutes(v){let a=String(v||'').split(':').map(Number);return a.length===2&&a.every(Number.isFinite)?a[0]*60+a[1]:NaN}function clockText(n){n=(n+1440)%1440;return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')}
-function makeSchedule(){calculate();let ps=players().filter(p=>scheduleSelection?.has(p)),start=clockMinutes($('scheduleStart').value),end=clockMinutes($('scheduleEnd').value),mins=+$('scheduleMinutes').value,courts=+$('scheduleCourts').value;if(ps.length<4)return alert('참여 선수를 4명 이상 선택하세요.');if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)return alert('종료 시간은 시작 시간보다 늦어야 합니다.');if(mins<10||courts<1)return alert('경기 시간과 코트 수를 확인하세요.');let rounds=Math.floor((end-start)/mins);if(rounds<1)return alert('입력한 시간 안에 편성할 수 있는 경기가 없습니다.');let useCourts=Math.min(courts,Math.floor(ps.length/4)),plays=Object.fromEntries(ps.map(p=>[p,0])),partner={},opponent={},rows=[],roundInfo=[];const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,'ko')).join('|'),rel=(map,a,b)=>map[pairKey(a,b)]||0,add=(map,a,b)=>map[pairKey(a,b)]=(map[pairKey(a,b)]||0)+1;for(let r=0;r<rounds;r++){let rotated=[...ps].sort((a,b)=>(plays[a]-plays[b])||(((ps.indexOf(a)-r*useCourts*4+ps.length*20)%ps.length)-((ps.indexOf(b)-r*useCourts*4+ps.length*20)%ps.length))),active=rotated.slice(0,useCourts*4),rest=ps.filter(p=>!active.includes(p));for(let c=0;c<useCourts;c++){let q=active.slice(c*4,c*4+4),sets=[[[q[0],q[1]],[q[2],q[3]]],[[q[0],q[2]],[q[1],q[3]]],[[q[0],q[3]],[q[1],q[2]]]],rated=sets.map(x=>{let repeats=rel(partner,...x[0])+rel(partner,...x[1]),opps=x[0].reduce((n,a)=>n+x[1].reduce((z,b)=>z+rel(opponent,a,b),0),0),p=winProb(...x);return{x,p,score:repeats*60+opps*8+Math.abs(p-.5)*100}}).sort((a,b)=>a.score-b.score)[0],A=rated.x[0],B=rated.x[1];A.concat(B).forEach(p=>plays[p]++);add(partner,...A);add(partner,...B);for(const a of A)for(const b of B)add(opponent,a,b);rows.push({time:`${clockText(start+r*mins)}–${clockText(start+(r+1)*mins)}`,court:c+1,A,B,p:rated.p,rest:rest.join(' · ')||'-'})}roundInfo.push({round:r+1,rest})}$('scheduleRows').innerHTML=rows.map((x,i)=>`<tr><td>${x.time}</td><td>${x.court}번</td><td><b>${esc(x.A.join(' · '))}</b></td><td><span class="badge">${(x.p*100).toFixed(0)}% : ${((1-x.p)*100).toFixed(0)}%</span></td><td><b>${esc(x.B.join(' · '))}</b></td><td>${x.court===1?esc(x.rest):''}</td></tr>`).join('');let counts=Object.entries(plays).sort((a,b)=>b[1]-a[1]).map(([p,n])=>`${esc(p)} ${n}경기`).join(' · ');$('scheduleSummary').innerHTML=`<p class="notice"><b>${rounds}라운드 · ${rows.length}경기 · ${useCourts}코트 사용</b><br><span class="schedule-balance">${counts}</span></p>`}
+
 async function commit(){saveLocal();render();if(cloud)try{await cloud.push(matches)}catch(e){setStatus('⚠ 동기화 실패');alert('Firebase 저장 실패: '+e.message)}}
 $('matchForm').addEventListener('submit',async e=>{e.preventDefault();let vals=['a1','a2','b1','b2'].map(id=>clean($(id).value));if(new Set(vals).size<4)return alert('서로 다른 선수 4명을 입력하세요.');if(+$('sa').value===+$('sb').value&&!confirm('동점으로 저장할까요?'))return;let id=$('editId').value,m={id:id||uid(),date:$('date').value,a1:vals[0],a2:vals[1],b1:vals[2],b2:vals[3],sa:+$('sa').value,sb:+$('sb').value,memo:clean($('memo').value),createdAt:id?(matches.find(x=>x.id===id)?.createdAt||new Date().toISOString()):new Date().toISOString(),updatedAt:new Date().toISOString()};if(id)matches=matches.map(x=>x.id===id?m:x);else matches.push(m);resetForm();await commit()});
 function editMatch(id){let m=matches.find(x=>x.id===id);if(!m)return;for(const k of ['date','a1','a2','b1','b2','sa','sb','memo'])$(k).value=m[k]??'';$('editId').value=id;$('formTitle').textContent='경기 결과 수정';$('cancelEdit').hidden=false;scrollTo({top:0,behavior:'smooth'})}function resetForm(){$('matchForm').reset();$('date').value=today();$('editId').value='';$('formTitle').textContent='경기 결과 입력';$('cancelEdit').hidden=true}async function deleteMatch(id){if(confirm('이 경기를 삭제할까요?')){matches=matches.filter(x=>x.id!==id);await commit()}}$('cancelEdit').onclick=resetForm;
@@ -149,7 +149,7 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
 (()=>{const gradeByPlayer={"김용장":"full","박희겸":"full","노해창":"full","전한빈":"full","김경렬":"associate","정동언":"guest","양지수":"associate","안일호":"full","유명":"associate","박성빈":"guest","서현재":"guest","심효정":"associate","박성익":"full","양시창":"associate","한장규":"associate","장동언":"guest","박효수":"full","유환성":"full"},slots=['a1','a2','b1','b2'];let needsGradeSync=false;function applyRegisteredGrades(){let changed=false;for(const m of matches)for(const slot of slots){let grade=gradeByPlayer[clean(m[slot])];if(grade&&m[slot+'Grade']!==grade){m[slot+'Grade']=grade;changed=true}}if(changed){needsGradeSync=true;saveLocal()}return changed}const renderWithRegisteredGrades=render;render=function(){applyRegisteredGrades();renderWithRegisteredGrades()};applyRegisteredGrades();render();let status=$('syncStatus');new MutationObserver(async()=>{if(needsGradeSync&&cloud&&status.textContent.includes('실시간 동기화')){needsGradeSync=false;try{await cloud.push(matches)}catch(e){needsGradeSync=true;console.error(e)}}}).observe(status,{childList:true,characterData:true,subtree:true})})();
 </script>
 <style>.developer-credit{margin-top:6px;color:#c9f6e5;font-size:10px;font-weight:800;letter-spacing:.4px}@media(max-width:700px){.developer-credit{margin-top:3px;font-size:7px}}</style>
-<script>(()=>{let version=document.querySelector('.app-version');if(version){version.textContent='v1.7.3';version.title='현재 버전 v1.7.3'}let copy=document.querySelector('.brand-copy');if(copy&&!copy.querySelector('.developer-credit')){let credit=document.createElement('div');credit.className='developer-credit';credit.textContent='개발자: 빈빈스';copy.appendChild(credit)}})();</script>
+<script>(()=>{let version=document.querySelector('.app-version');if(version){version.textContent='v1.8';version.title='현재 버전 v1.8'}let copy=document.querySelector('.brand-copy');if(copy&&!copy.querySelector('.developer-credit')){let credit=document.createElement('div');credit.className='developer-credit';credit.textContent='개발자: 빈빈스';copy.appendChild(credit)}})();</script>
 <style>.admin-delete-note{margin-top:8px;color:var(--bad);font-size:12px;font-weight:700}</style>
 <script>
 (()=>{const ADMIN_SESSION='jolly_admin_unlocked';function adminOn(){return sessionStorage.getItem(ADMIN_SESSION)==='1'}let deleteButton=document.querySelector('#data button.danger[onclick="clearAll()"]');if(deleteButton){let note=document.createElement('div');note.className='admin-delete-note';note.textContent='관리자 모드에서만 전체 경기 삭제가 가능합니다.';deleteButton.closest('.actions').insertAdjacentElement('afterend',note)}function updateDeleteAccess(){let active=adminOn();if(deleteButton)deleteButton.style.display=active?'inline-flex':'none';if(note)note.style.display=active?'block':'none'}clearAll=async function(){if(!adminOn()){alert('모든 경기 삭제는 관리자 모드에서만 사용할 수 있습니다.');return}let phrase=prompt('⚠ 모든 경기 기록을 영구 삭제합니다.\nFirebase 기록도 함께 삭제되며 되돌릴 수 없습니다.\n\n계속하려면 아래에 전체삭제를 입력하세요.');if(phrase===null)return;if(phrase.trim()!=='전체삭제'){alert('확인 문구가 일치하지 않아 삭제를 취소했습니다.');return}if(!confirm(`정말 ${matches.length}개의 모든 경기 기록을 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`))return;matches=[];await commit();alert('모든 경기 기록이 삭제되었습니다.')};let adminButton=document.querySelector('.admin-mode-btn');if(adminButton)adminButton.addEventListener('click',()=>setTimeout(updateDeleteAccess,0));updateDeleteAccess()})();
@@ -182,137 +182,7 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
   applyRegisteredProfiles();renderPlayers();
 })();
 </script>
-<script>
-(()=>{
-  const slots=['a1','a2','b1','b2'];
-  const femalePlayers=new Set(['김동매','심효정','양지수','박혜수']); // 성별 정보 없는 선수 기본값 보정용
-  function genderOf(player){
-    let newest=null;
-    for(const match of matches) for(const slot of slots)
-      if(clean(match[slot])===clean(player)&&match[slot+'Gender']){
-        let time=String(match.updatedAt||match.createdAt||match.date||'');
-        if(!newest||time>=newest.time) newest={time,gender:match[slot+'Gender']};
-      }
-    return newest?.gender||(femalePlayers.has(clean(player))?'F':'M');
-  }
 
-  makeSchedule=function(){
-    calculate();
-    let selected=players().filter(p=>scheduleSelection?.has(p));
-    let totalMins=+$('scheduleTotal').value;
-    let restMins=Math.max(0,+$('scheduleRest')?.value||0);
-    let mins=+$('scheduleMinutes').value;
-    let courts=+$('scheduleCourts').value;
-    let playableMins=totalMins-restMins;
-    if(selected.length<4) return alert('등록 선수 중 참여 선수를 4명 이상 선택하세요.');
-    if(playableMins<mins||mins<10||courts<1) return alert('총 경기시간에서 마지막 휴식 시간을 제외한 경기 가능 시간, 경기당 시간, 코트 수를 확인하세요.');
-    let rounds=Math.floor(playableMins/mins);
-    if(rounds<1) return alert('휴식 시간을 제외한 시간 안에 편성할 수 있는 경기가 없습니다.');
-
-    let plays=Object.fromEntries(selected.map(p=>[p,0]));
-    let metCount={}, partner={}, quartetHist={};
-    let rows=[], skippedCourts=0;
-
-    const pairKey=(a,b)=>[a,b].sort((x,y)=>x.localeCompare(y,'ko')).join('|');
-    const groupKey=g=>[...g].sort((a,b)=>a.localeCompare(b,'ko')).join('|');
-    const rel=(map,a,b)=>map[pairKey(a,b)]||0;
-    const add=(map,a,b)=>map[pairKey(a,b)]=(map[pairKey(a,b)]||0)+1;
-
-    function typeOf(group){
-      let men=group.filter(p=>genderOf(p)!=='F').length, women=group.length-men;
-      if(men===4) return '남복';
-      if(women===4) return '여복';
-      if(men===2&&women===2) return '혼복';
-      return null; // 잡복(3:1) 등은 무효 처리 → 후보에서 제외
-    }
-    function pairingsFor(type,group){
-      if(type==='혼복'){
-        let men=group.filter(p=>genderOf(p)!=='F'), women=group.filter(p=>genderOf(p)==='F');
-        return [[[men[0],women[0]],[men[1],women[1]]],[[men[0],women[1]],[men[1],women[0]]]];
-      }
-      return [[[group[0],group[1]],[group[2],group[3]]],[[group[0],group[2]],[group[1],group[3]]],[[group[0],group[3]],[group[1],group[2]]]];
-    }
-    function quartetMetSum(group){
-      let sum=0;
-      for(let i=0;i<4;i++) for(let j=i+1;j<4;j++) sum+=rel(metCount,group[i],group[j]);
-      return sum;
-    }
-    // 3단계(밸런스) > 4단계(재회피) 순으로 팀 분할 결정
-    function bestSplit(group){
-      let type=typeOf(group);
-      if(!type) return null;
-      let options=pairingsFor(type,group).map(teams=>{
-        let [A,B]=teams, probability=winProb(A,B);
-        return {type,teams,probability,
-          balanceGap:Math.abs(probability-.5),
-          repeatScore:rel(partner,...A)+rel(partner,...B)};
-      });
-      options.sort((a,b)=>(a.balanceGap-b.balanceGap)||(a.repeatScore-b.repeatScore));
-      return options[0];
-    }
-    // 코트 하나를 채울 최선의 4인 조합을 남은 인원 중에서 탐색 (2·3·4단계 동시 적용)
-    function bestQuartet(pool){
-      let best=null;
-      for(let i=0;i<pool.length;i++) for(let j=i+1;j<pool.length;j++)
-        for(let k=j+1;k<pool.length;k++) for(let l=k+1;l<pool.length;l++){
-          let group=[pool[i],pool[j],pool[k],pool[l]];
-          let split=bestSplit(group); // typeOf가 null이면 여기서 자동 제외(잡복 원천 차단)
-          if(!split) continue;
-          let score=split.balanceGap*1e6                          // 3순위: 밸런스 최우선
-                    +quartetMetSum(group)*10                       // 4순위: 파트너 포함 전체 재회피
-                    +(quartetHist[groupKey(group)]||0)*1e4;        // 동일 4인조 완전 재편성은 특히 회피
-          if(!best||score<best.score) best={group,split,score};
-        }
-      return best;
-    }
-
-    for(let round=0; round<rounds; round++){
-      // 1단계: 경기수가 적은 인원부터 이번 라운드 풀에 배정
-      let ordered=[...selected].sort((a,b)=>(plays[a]-plays[b])||(((selected.indexOf(a)-round+selected.length)%selected.length)-((selected.indexOf(b)-round+selected.length)%selected.length)));
-      let slotCount=Math.min(courts, Math.floor(selected.length/4))*4;
-      let pool=ordered.slice(0,slotCount);
-      let bench=ordered.slice(slotCount);
-
-      // 1.5단계 보정: 남/여 인원이 홀수면(=잡복이 필연적으로 발생) 최소 피해로 1명 교체
-      let menCount=pool.filter(p=>genderOf(p)!=='F').length;
-      if(menCount%2!==0 && bench.length){
-        let outIdx=[...pool].map((p,i)=>i).sort((a,b)=>plays[pool[b]]-plays[pool[a]])
-          .find(i=>true); // 풀 안에서 가장 많이 뛴 인원부터 후보
-        for(const i of [...pool].map((_,i)=>i).sort((a,b)=>plays[pool[b]]-plays[pool[a]])){
-          let swapOutGender=genderOf(pool[i]);
-          let swapInIdx=bench.findIndex(p=>genderOf(p)!==swapOutGender);
-          if(swapInIdx>-1){ let tmp=pool[i]; pool[i]=bench[swapInIdx]; bench[swapInIdx]=tmp; break; }
-        }
-      }
-
-      let remain=[...pool], plan=[];
-      let courtSlots=Math.min(courts, Math.floor(pool.length/4));
-      for(let c=0;c<courtSlots;c++){
-        let picked=bestQuartet(remain);
-        if(!picked){ skippedCourts++; break; } // 유효 조합이 정말 없으면 그 코트는 비움
-        plan.push(picked);
-        remain=remain.filter(p=>!picked.group.includes(p));
-      }
-      let rest=selected.filter(p=>!plan.some(x=>x.group.includes(p)));
-
-      plan.forEach((item,index)=>{
-        let {group,split}=item, [A,B]=split.teams;
-        group.forEach(p=>plays[p]++);
-        quartetHist[groupKey(group)]=(quartetHist[groupKey(group)]||0)+1;
-        add(partner,...A); add(partner,...B);
-        add(metCount,A[0],A[1]); add(metCount,B[0],B[1]);
-        for(const a of A) for(const b of B) add(metCount,a,b);
-        rows.push({round:round+1, time:`${round*mins}–${(round+1)*mins}분`, court:index+1, type:split.type, A, B, p:split.probability, rest:rest.join(' · ')||'-'});
-      });
-    }
-
-    $('scheduleRows').innerHTML=rows.map(row=>`<tr><td><b>${row.round}라운드</b><br><span class="schedule-balance">${row.time}</span></td><td>${row.court}번</td><td><span class="badge">${row.type}</span><br><b>${esc(row.A.join(' · '))}</b></td><td><span class="badge">${(row.p*100).toFixed(0)}% : ${((1-row.p)*100).toFixed(0)}%</span></td><td><span class="badge">${row.type}</span><br><b>${esc(row.B.join(' · '))}</b></td><td>${row.court===1?esc(row.rest):''}</td></tr>`).join('');
-    let counts=Object.entries(plays).sort((a,b)=>b[1]-a[1]).map(([p,c])=>`${esc(p)} ${c}경기`).join(' · ');
-    let used=(rows.length?Math.max(...rows.map(r=>r.round)):0)*mins;
-    $('scheduleSummary').innerHTML=`<p class="notice"><b>①인당 경기수 균등 → ②잡복 제외(남복·혼복·여복만) → ③랭킹 기반 50:50 밸런스 → ④파트너·4인 조합 재회피 순으로 편성 · ${rows.length}경기 · 경기 ${used}분 + 마지막 휴식 ${restMins}분 / 총 ${totalMins}분</b><br><span class="schedule-balance">${counts}</span></p>${skippedCourts?`<p class="notice">성비 문제로 잡복 없이 편성 불가능한 코트 ${skippedCourts}회는 비워졌습니다.</p>`:''}`;
-  };
-})();
-</script>
 
 <style>.schedule-final-rest td{background:#f2f8e9!important;color:#3f6d36;font-weight:800}.dark .schedule-final-rest td{background:#193627!important;color:#d6f5d2}</style>
 <script>
@@ -404,14 +274,14 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
           balanceGap:Math.abs(probability-.5),
           partnerRepeat:rel(partner,...A)+rel(partner,...B)};
       });
-      options.sort((a,b)=>(a.balanceGap-b.balanceGap)||(a.partnerRepeat-b.partnerRepeat));
+      options.sort((a,b)=>(a.partnerRepeat-b.partnerRepeat)||(a.balanceGap-b.balanceGap));
       let best=options[0];
-      let tier=Math.round(best.balanceGap*20); // 5% 단위 구간화 → 재회피가 실제로 작동하게 함
+      let tier=Math.round(best.balanceGap*20);
       let qRepeat=quartetHist[groupKey(group)]||0;
-      let score = tier*1e8                    // 3순위: 밸런스(구간)
-                + qRepeat*1e6                  // 4순위-a: 완전 동일 4인조 재편성 최우선 회피
-                + best.partnerRepeat*1e4       // 4순위-b: 파트너 재사용 회피
-                + quartetMetSum(group)*10;     // 4순위-c: 4인 전체 접촉 이력 회피
+      let score = best.partnerRepeat*1e10   // 1순위: 파트너 중복 회피(가능하면 0회 강제)
+          + tier*1e8                   // 2순위: 밸런스(구간)
+          + qRepeat*1e6                // 3순위: 동일 4인조 재편성 회피
+          + quartetMetSum(group)*10;   // 4순위: 4인 전체 접촉 이력 회피
       return {group,type,teams:best.teams,probability:best.probability,score};
     }
     function combos4(pool){
