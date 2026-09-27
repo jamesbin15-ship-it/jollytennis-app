@@ -365,7 +365,7 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
       });
     }
 
-    $('scheduleRows').innerHTML=rows.map(row=>`<tr><td><b>${row.round}라운드</b><br><span class="schedule-balance">${row.time}</span></td><td>${row.court}번</td><td><span class="badge">${row.type}</span><br><b>${esc(row.A.join(' · '))}</b></td><td><span class="badge">${(row.p*100).toFixed(0)}% : ${((1-row.p)*100).toFixed(0)}%</span></td><td><span class="badge">${row.type}</span><br><b>${esc(row.B.join(' · '))}</b></td><td>${row.court===1?esc(row.rest):''}</td></tr>`).join('');
+    $('scheduleRows').innerHTML=rows.map(row=>`<tr><td><b>${row.round}라운드</b><br><span class="schedule-balance">${row.time}</span></td><td>${row.court+7}번</td><td><span class="badge">${row.type}</span><br><b>${esc(row.A.join(' · '))}</b></td><td><span class="badge">${(row.p*100).toFixed(0)}% : ${((1-row.p)*100).toFixed(0)}%</span></td><td><span class="badge">${row.type}</span><br><b>${esc(row.B.join(' · '))}</b></td><td>${row.court===1?esc(row.rest):''}</td></tr>`).join('');
     let counts=Object.entries(plays).sort((a,b)=>b[1]-a[1]).map(([p,c])=>`${esc(p)} ${c}경기`).join(' · ');
     let used=(rows.length?Math.max(...rows.map(r=>r.round)):0)*mins;
     let maleFormatSummary=malePlayers.map(player=>`${esc(player)} 혼복 ${mixedDoubles[player]}회 · 남복 ${maleDoubles[player]}회`).join('　');
@@ -408,22 +408,22 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
 
   function makeScheduleCanvas(){
     const data=readScheduleForImage();if(!data)return null;
-    const width=1400,headerH=250,colHeadH=74,rowH=174,infoH=250,footerH=66;
+    const width=1400,headerH=250,colHeadH=74,rowH=174,infoH=330,footerH=70;
     const height=headerH+colHeadH+data.rounds.length*rowH+infoH+footerH;
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext('2d');
-    ctx.fillStyle='#fbfdf9';ctx.fillRect(0,0,width,height);
-    const grad=ctx.createLinearGradient(0,0,width,0);grad.addColorStop(0,'#006744');grad.addColorStop(.55,'#079766');grad.addColorStop(1,'#75bd36');ctx.fillStyle=grad;ctx.fillRect(0,0,width,headerH);
-    ctx.fillStyle='rgba(255,255,255,.10)';for(let x=40;x<width;x+=80){ctx.beginPath();ctx.arc(x,40+(x%160),48,0,Math.PI*2);ctx.fill()}
-    ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.font='900 58px Arial, sans-serif';ctx.fillText('JOLLY',54,82);ctx.fillStyle='#d8ff57';ctx.font='800 29px Arial, sans-serif';ctx.fillText('Tennis Club',58,130);
-    const created=new Date(),dateTitle=`${created.getMonth()+1}/${created.getDate()} 복식 경기표`;
-    drawCentered(ctx,dateTitle,280,91,800,72,'#fff',900);drawCentered(ctx,'좋은 사람들과, 즐거운 테니스!',300,164,760,30,'#eaffd9',700);
-    ctx.fillStyle='#c8f244';ctx.beginPath();ctx.arc(1250,102,67,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=8;ctx.beginPath();ctx.arc(1224,80,54,Math.PI*.15,Math.PI*.7);ctx.stroke();ctx.beginPath();ctx.arc(1274,126,54,Math.PI*1.15,Math.PI*1.7);ctx.stroke();
-    ctx.fillStyle='#eaffd9';ctx.font='700 22px Arial, sans-serif';ctx.textAlign='center';ctx.fillText(`${created.getFullYear()}년 ${created.getMonth()+1}월 ${created.getDate()}일 생성`,1250,198);
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+    const drawBall=(x,y,r)=>{let g=ctx.createRadialGradient(x-r*.35,y-r*.4,r*.08,x,y,r);g.addColorStop(0,'#efff68');g.addColorStop(.6,'#a6d91e');g.addColorStop(1,'#65a900');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(3,r*.09);ctx.beginPath();ctx.arc(x-r*.42,y-r*.18,r*.72,-1.05,1.04);ctx.stroke();ctx.beginPath();ctx.arc(x+r*.42,y+r*.18,r*.72,2.1,4.2);ctx.stroke()};
+    ctx.fillStyle='#e5f8d2';ctx.beginPath();ctx.moveTo(310,48);ctx.lineTo(1008,32);ctx.lineTo(1060,171);ctx.lineTo(286,183);ctx.lineTo(336,144);ctx.lineTo(292,111);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#c8ed9c';ctx.globalAlpha=.7;for(let i=0;i<9;i++)ctx.fillRect(325+i*7,32-i%3*5,660-i*19,4);ctx.globalAlpha=1;
+    ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle='#00503d';ctx.font='italic 900 66px Arial, sans-serif';ctx.fillText('JOLLY',40,68);drawBall(145,49,24);ctx.font='italic 800 34px Arial, sans-serif';ctx.fillText('Tennis Club',53,112);ctx.font='700 19px Arial, sans-serif';ctx.fillText('Good People!',78,153);ctx.fillText('Good Tennis!',78,178);ctx.strokeStyle='#00503d';ctx.lineWidth=4;ctx.beginPath();ctx.arc(224,165,29,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(214,157,2,0,Math.PI*2);ctx.arc(233,157,2,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(224,163,15,.15,Math.PI-.15);ctx.stroke();
+    const created=new Date(),week=['일','월','화','수','목','금','토'][created.getDay()],dateTitle=`${created.getMonth()+1}/${created.getDate()}(${week}) 복식 경기표`;
+    drawCentered(ctx,dateTitle,290,100,790,76,'#003f32',900);drawCentered(ctx,'좋은 사람들과, 즐거운 테니스!  ☺',340,171,690,29,'#164b3a',700);
+    ctx.save();ctx.translate(1130,55);ctx.rotate(-.11);ctx.fillStyle='#132a70';ctx.font='italic 800 26px Arial, sans-serif';ctx.fillText('오늘도',0,0);ctx.fillText('멋진 플레이!',-15,34);ctx.restore();drawBall(1315,55,48);drawBall(1185,133,18);ctx.fillStyle='#19316f';ctx.font='italic 800 23px Arial, sans-serif';ctx.fillText('Play Tennis',1240,132);ctx.fillText('Be Happy!',1248,164);ctx.strokeStyle='#75be10';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(1085,174);ctx.quadraticCurveTo(1165,116,1245,113);ctx.stroke();
 
     const left=30,roundW=145,timeW=200,restW=245,maxCourts=Math.max(1,...data.rounds.map(r=>r.games.length)),courtW=(width-left*2-roundW-timeW-restW)/maxCourts;
     let y=headerH;ctx.fillStyle='#075f46';ctx.fillRect(left,y,width-left*2,colHeadH);
-    const heads=[['라운드',left,roundW],['경기시간',left+roundW,timeW]];for(let i=0;i<maxCourts;i++)heads.push([`${i+1}코트`,left+roundW+timeW+i*courtW,courtW]);heads.push(['휴식 선수',width-left-restW,restW]);
+    const heads=[['라운드',left,roundW],['시간',left+roundW,timeW]];for(let i=0;i<maxCourts;i++)heads.push([`${i+8}번 코트`,left+roundW+timeW+i*courtW,courtW]);heads.push(['휴식 선수',width-left-restW,restW]);
     for(const [label,x,w] of heads){drawCentered(ctx,label,x,y+colHeadH/2,w,27,'#fff',800);ctx.strokeStyle='rgba(255,255,255,.45)';ctx.strokeRect(x,y,w,colHeadH)}
     y+=colHeadH;
     data.rounds.forEach((round,index)=>{
@@ -441,12 +441,16 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
       drawCentered(ctx,round.rest==='-'?'없음':round.rest,width-left-restW,y+rowH/2,restW,fitText(ctx,round.rest,width-left-(width-left-restW)-22,25,16),'#183e30',700);y+=rowH;
     });
 
-    ctx.fillStyle='#eef8e6';rounded(ctx,left,y+18,620,infoH-36,18);ctx.fill();ctx.strokeStyle='#b9d77c';ctx.stroke();
-    ctx.textAlign='left';ctx.fillStyle='#075f46';ctx.font='900 29px Arial, sans-serif';ctx.fillText('🎾 경기 안내',left+28,y+57);ctx.fillStyle='#173d2e';ctx.font='700 23px Arial, sans-serif';
-    const guide=[`총 ${data.rounds.length}라운드 · 경기당 ${$('scheduleMinutes')?.value||'-'}분`,`사용 코트 ${maxCourts}면`,`마지막 휴식 ${data.restMins}분`,`남복 · 혼복 · 여복 균형 편성`];guide.forEach((t,i)=>ctx.fillText(`✓  ${t}`,left+32,y+103+i*34));
-    ctx.fillStyle='#fff';rounded(ctx,675,y+18,width-left-675,infoH-36,18);ctx.fill();ctx.strokeStyle='#c7d8cf';ctx.stroke();ctx.fillStyle='#075f46';ctx.font='900 29px Arial, sans-serif';ctx.fillText('👑 참가 선수 명단',705,y+57);
-    ctx.fillStyle='#173d2e';ctx.font='700 21px Arial, sans-serif';const half=Math.ceil(data.players.length/2);data.players.forEach((p,i)=>{let col=i<half?0:1,row=i<half?i:i-half;ctx.fillText(p,715+col*320,y+101+row*29)});
-    y+=infoH;ctx.fillStyle='#075f46';ctx.fillRect(0,y,width,footerH);drawCentered(ctx,'JOLLY TENNIS CLUB  ·  좋은 사람들, 좋은 시간, 더 나은 오늘!',0,y+footerH/2,width,23,'#fff',700);
+    const panelY=y+18,panelH=infoH-36;
+    ctx.fillStyle='#f7fcec';rounded(ctx,left,panelY,460,panelH,14);ctx.fill();ctx.strokeStyle='#c8df73';ctx.stroke();ctx.fillStyle='#e8f7c8';ctx.fillRect(left,panelY,460,57);drawBall(left+28,panelY+28,17);
+    ctx.textAlign='left';ctx.fillStyle='#075f46';ctx.font='900 29px Arial, sans-serif';ctx.fillText('대회 안내',left+58,panelY+29);ctx.fillStyle='#153a86';ctx.font='700 22px Arial, sans-serif';
+    const guide=[`총 ${data.rounds.length}라운드 (경기당 ${$('scheduleMinutes')?.value||'-'}분)`,`사용 코트 ${Array.from({length:maxCourts},(_,i)=>i+8).join('·')}번`,`마지막 휴식 ${data.restMins}분`,`파트너 중복 최소화`,`즐겁고 안전한 경기 되세요!`];guide.forEach((t,i)=>{ctx.fillStyle='#55b814';ctx.beginPath();ctx.arc(left+34,panelY+91+i*39,14,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='900 17px Arial';ctx.fillText('✓',left+25,panelY+91+i*39);ctx.fillStyle='#153a86';ctx.font='700 21px Arial, sans-serif';ctx.fillText(t,left+58,panelY+91+i*39)});
+    const listX=510,listW=450;ctx.fillStyle='#fff';rounded(ctx,listX,panelY,listW,panelH,14);ctx.fill();ctx.strokeStyle='#c8df73';ctx.stroke();ctx.fillStyle='#edf8ce';ctx.fillRect(listX,panelY,listW,57);ctx.fillStyle='#075f46';ctx.font='900 29px Arial, sans-serif';ctx.fillText('♛  참가 선수 명단',listX+24,panelY+29);
+    ctx.fillStyle='#173d78';ctx.font='700 20px Arial, sans-serif';const half=Math.ceil(data.players.length/2),lineGap=Math.min(31,(panelH-83)/Math.max(1,half));data.players.forEach((p,i)=>{let col=i<half?0:1,row=i<half?i:i-half;ctx.fillText(p,listX+58+col*205,panelY+86+row*lineGap)});ctx.strokeStyle='#d8e4dc';ctx.beginPath();ctx.moveTo(listX+listW/2,panelY+75);ctx.lineTo(listX+listW/2,panelY+panelH-18);ctx.stroke();
+    const artX=980,artW=390;ctx.fillStyle='#f8fcf3';rounded(ctx,artX,panelY,artW,panelH,14);ctx.fill();ctx.fillStyle='#083f32';ctx.font='italic 800 30px Arial, sans-serif';ctx.fillText('“ 테니스는',artX+35,panelY+62);ctx.fillText('좋은 사람들과 할 때',artX+58,panelY+101);ctx.fillText('더 즐겁습니다. ” ☺',artX+75,panelY+140);
+    ctx.save();ctx.translate(artX+245,panelY+222);ctx.rotate(-.62);ctx.strokeStyle='#0a573d';ctx.lineWidth=13;ctx.beginPath();ctx.ellipse(0,-31,65,91,0,0,Math.PI*2);ctx.stroke();ctx.lineWidth=3;for(let i=-45;i<=45;i+=15){ctx.beginPath();ctx.moveTo(i,-105);ctx.lineTo(i,43);ctx.stroke()}for(let i=-92;i<=28;i+=17){ctx.beginPath();ctx.moveTo(-55,i);ctx.lineTo(55,i);ctx.stroke()}ctx.lineWidth=22;ctx.beginPath();ctx.moveTo(0,55);ctx.lineTo(0,150);ctx.stroke();ctx.restore();drawBall(artX+323,panelY+238,36);
+    ctx.fillStyle='#075f46';ctx.font='900 19px Arial, sans-serif';ctx.fillText('JOLLY TENNIS CLUB',artX+122,panelY+panelH-22);
+    y+=infoH;ctx.fillStyle='#075f46';ctx.fillRect(0,y,width,footerH);drawCentered(ctx,'JOLLY TENNIS CLUB     ─────     좋은 사람들, 좋은 시간, 더 나은 오늘!  ☺',0,y+footerH/2,width,23,'#fff',700);
     scheduleCanvas=canvas;scheduleFileName=`jolly-tennis-${created.toISOString().slice(0,10)}.png`;return canvas;
   }
 
