@@ -373,5 +373,90 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
   };
 })();
 </script>
+<style>
+.schedule-share-card{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.schedule-share-card[hidden]{display:none}.schedule-share-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.schedule-share-head h3{margin:0}.schedule-share-actions{display:flex;gap:8px;flex-wrap:wrap}.schedule-share-preview{display:block;width:100%;max-width:1100px;margin:auto;border-radius:12px;border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,55,39,.12)}
+@media(max-width:560px){.schedule-share-card{padding:10px}.schedule-share-actions{width:100%}.schedule-share-actions .btn{flex:1}}
+</style>
+<script>
+(()=>{
+  const shareCard=document.createElement('div');
+  shareCard.id='scheduleShareCard';shareCard.className='schedule-share-card';shareCard.hidden=true;
+  shareCard.innerHTML=`<div class="schedule-share-head"><div><h3>공유용 대진표 이미지</h3><div class="schedule-balance">대진표를 만들면 날짜와 경기 내용이 자동 반영됩니다.</div></div><div class="schedule-share-actions"><button type="button" class="btn" id="copyScheduleImage">이미지 복사</button><button type="button" class="btn secondary" id="saveScheduleImage">PNG 저장</button></div></div><img id="scheduleSharePreview" class="schedule-share-preview" alt="공유용 복식 경기표 미리보기">`;
+  const tableWrap=$('scheduleRows')?.closest('.tablewrap');
+  if(tableWrap)tableWrap.insertAdjacentElement('afterend',shareCard);
+
+  let scheduleCanvas=null,scheduleFileName='jolly-tennis-schedule.png';
+  const rounded=(ctx,x,y,w,h,r)=>{ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.closePath()};
+  const fitText=(ctx,text,maxWidth,startSize,minSize=18)=>{let size=startSize;while(size>minSize){ctx.font=`800 ${size}px Arial, sans-serif`;if(ctx.measureText(text).width<=maxWidth)break;size-=2}return size};
+  const drawCentered=(ctx,text,x,y,w,size,color='#10281f',weight=800)=>{ctx.fillStyle=color;ctx.font=`${weight} ${size}px Arial, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,x+w/2,y)};
+
+  function readScheduleForImage(){
+    const gameRows=[...document.querySelectorAll('#scheduleRows tr')].filter(row=>!row.querySelector('.empty')&&!row.classList.contains('schedule-final-rest'));
+    if(!gameRows.length)return null;
+    const rounds=new Map();
+    for(const row of gameRows){
+      const cells=row.cells,round=+(cells[0]?.querySelector('b')?.textContent.match(/\d+/)?.[0]||0);
+      if(!rounds.has(round))rounds.set(round,{round,time:cells[0]?.querySelector('.schedule-balance')?.textContent.trim()||'',games:[],rest:cells[5]?.textContent.trim()||'-'});
+      const item=rounds.get(round),type=cells[2]?.querySelector('.badge')?.textContent.trim()||'';
+      item.games.push({court:cells[1]?.textContent.trim()||'',type,A:cells[2]?.querySelector('b')?.textContent.trim()||'',B:cells[4]?.querySelector('b')?.textContent.trim()||'',prob:cells[3]?.textContent.trim()||''});
+      if(cells[5]?.textContent.trim())item.rest=cells[5].textContent.trim();
+    }
+    return {rounds:[...rounds.values()],players:[...(scheduleSelection||[])].sort((a,b)=>a.localeCompare(b,'ko')),restMins:Math.max(0,+$('scheduleRest')?.value||0)};
+  }
+
+  function makeScheduleCanvas(){
+    const data=readScheduleForImage();if(!data)return null;
+    const width=1400,headerH=250,colHeadH=74,rowH=174,infoH=250,footerH=66;
+    const height=headerH+colHeadH+data.rounds.length*rowH+infoH+footerH;
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fbfdf9';ctx.fillRect(0,0,width,height);
+    const grad=ctx.createLinearGradient(0,0,width,0);grad.addColorStop(0,'#006744');grad.addColorStop(.55,'#079766');grad.addColorStop(1,'#75bd36');ctx.fillStyle=grad;ctx.fillRect(0,0,width,headerH);
+    ctx.fillStyle='rgba(255,255,255,.10)';for(let x=40;x<width;x+=80){ctx.beginPath();ctx.arc(x,40+(x%160),48,0,Math.PI*2);ctx.fill()}
+    ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle='#fff';ctx.font='900 58px Arial, sans-serif';ctx.fillText('JOLLY',54,82);ctx.fillStyle='#d8ff57';ctx.font='800 29px Arial, sans-serif';ctx.fillText('Tennis Club',58,130);
+    const created=new Date(),dateTitle=`${created.getMonth()+1}/${created.getDate()} 복식 경기표`;
+    drawCentered(ctx,dateTitle,280,91,800,72,'#fff',900);drawCentered(ctx,'좋은 사람들과, 즐거운 테니스!',300,164,760,30,'#eaffd9',700);
+    ctx.fillStyle='#c8f244';ctx.beginPath();ctx.arc(1250,102,67,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=8;ctx.beginPath();ctx.arc(1224,80,54,Math.PI*.15,Math.PI*.7);ctx.stroke();ctx.beginPath();ctx.arc(1274,126,54,Math.PI*1.15,Math.PI*1.7);ctx.stroke();
+    ctx.fillStyle='#eaffd9';ctx.font='700 22px Arial, sans-serif';ctx.textAlign='center';ctx.fillText(`${created.getFullYear()}년 ${created.getMonth()+1}월 ${created.getDate()}일 생성`,1250,198);
+
+    const left=30,roundW=145,timeW=200,restW=245,maxCourts=Math.max(1,...data.rounds.map(r=>r.games.length)),courtW=(width-left*2-roundW-timeW-restW)/maxCourts;
+    let y=headerH;ctx.fillStyle='#075f46';ctx.fillRect(left,y,width-left*2,colHeadH);
+    const heads=[['라운드',left,roundW],['경기시간',left+roundW,timeW]];for(let i=0;i<maxCourts;i++)heads.push([`${i+1}코트`,left+roundW+timeW+i*courtW,courtW]);heads.push(['휴식 선수',width-left-restW,restW]);
+    for(const [label,x,w] of heads){drawCentered(ctx,label,x,y+colHeadH/2,w,27,'#fff',800);ctx.strokeStyle='rgba(255,255,255,.45)';ctx.strokeRect(x,y,w,colHeadH)}
+    y+=colHeadH;
+    data.rounds.forEach((round,index)=>{
+      ctx.fillStyle=index%2?'#f1f8ef':'#fff';ctx.fillRect(left,y,width-left*2,rowH);ctx.strokeStyle='#b8d5c8';ctx.lineWidth=1.5;
+      const cols=[left,left+roundW,left+roundW+timeW,...Array.from({length:maxCourts},(_,i)=>left+roundW+timeW+(i+1)*courtW),width-left];for(const x of cols){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+rowH);ctx.stroke()}ctx.strokeRect(left,y,width-left*2,rowH);
+      drawCentered(ctx,`${round.round}R`,left,y+rowH/2,roundW,49,'#10281f',900);drawCentered(ctx,round.time,left+roundW,y+rowH/2,timeW,27,'#183e30',700);
+      for(let i=0;i<maxCourts;i++){
+        const game=round.games[i],x=left+roundW+timeW+i*courtW;if(!game){drawCentered(ctx,'휴장',x,y+rowH/2,courtW,26,'#92a39c',700);continue}
+        drawCentered(ctx,game.type,x,y+24,courtW,18,'#168247',800);
+        const teamSize=fitText(ctx,game.A,courtW-22,27,17);drawCentered(ctx,game.A,x,y+65,courtW,teamSize,'#111',800);
+        drawCentered(ctx,'VS',x,y+101,courtW,23,'#22a13f',900);
+        drawCentered(ctx,game.B,x,y+137,courtW,fitText(ctx,game.B,courtW-22,27,17),'#111',800);
+        drawCentered(ctx,game.prob,x,y+160,courtW,14,'#6c7c75',600);
+      }
+      drawCentered(ctx,round.rest==='-'?'없음':round.rest,width-left-restW,y+rowH/2,restW,fitText(ctx,round.rest,width-left-(width-left-restW)-22,25,16),'#183e30',700);y+=rowH;
+    });
+
+    ctx.fillStyle='#eef8e6';rounded(ctx,left,y+18,620,infoH-36,18);ctx.fill();ctx.strokeStyle='#b9d77c';ctx.stroke();
+    ctx.textAlign='left';ctx.fillStyle='#075f46';ctx.font='900 29px Arial, sans-serif';ctx.fillText('🎾 경기 안내',left+28,y+57);ctx.fillStyle='#173d2e';ctx.font='700 23px Arial, sans-serif';
+    const guide=[`총 ${data.rounds.length}라운드 · 경기당 ${$('scheduleMinutes')?.value||'-'}분`,`사용 코트 ${maxCourts}면`,`마지막 휴식 ${data.restMins}분`,`남복 · 혼복 · 여복 균형 편성`];guide.forEach((t,i)=>ctx.fillText(`✓  ${t}`,left+32,y+103+i*34));
+    ctx.fillStyle='#fff';rounded(ctx,675,y+18,width-left-675,infoH-36,18);ctx.fill();ctx.strokeStyle='#c7d8cf';ctx.stroke();ctx.fillStyle='#075f46';ctx.font='900 29px Arial, sans-serif';ctx.fillText('👑 참가 선수 명단',705,y+57);
+    ctx.fillStyle='#173d2e';ctx.font='700 21px Arial, sans-serif';const half=Math.ceil(data.players.length/2);data.players.forEach((p,i)=>{let col=i<half?0:1,row=i<half?i:i-half;ctx.fillText(p,715+col*320,y+101+row*29)});
+    y+=infoH;ctx.fillStyle='#075f46';ctx.fillRect(0,y,width,footerH);drawCentered(ctx,'JOLLY TENNIS CLUB  ·  좋은 사람들, 좋은 시간, 더 나은 오늘!',0,y+footerH/2,width,23,'#fff',700);
+    scheduleCanvas=canvas;scheduleFileName=`jolly-tennis-${created.toISOString().slice(0,10)}.png`;return canvas;
+  }
+
+  function renderScheduleSharePreview(){let canvas=makeScheduleCanvas();if(!canvas)return;shareCard.hidden=false;$('scheduleSharePreview').src=canvas.toDataURL('image/png')}
+  const makeScheduleWithImage=makeSchedule;makeSchedule=function(){makeScheduleWithImage();if(!$('scheduleRows')?.querySelector('.empty'))requestAnimationFrame(renderScheduleSharePreview)};
+
+  const canvasBlob=canvas=>new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  $('copyScheduleImage').onclick=async()=>{try{if(!scheduleCanvas)renderScheduleSharePreview();let blob=await canvasBlob(scheduleCanvas);if(navigator.clipboard&&window.ClipboardItem){await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);alert('대진표 이미지를 복사했습니다. 카카오톡이나 메시지에 붙여넣으세요.');return}throw new Error('clipboard unsupported')}catch(error){try{let blob=await canvasBlob(scheduleCanvas),file=new File([blob],scheduleFileName,{type:'image/png'});if(navigator.share&&navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:'졸리 테니스클럽 복식 경기표'});return}}catch(e){}alert('이 브라우저는 이미지 직접 복사를 지원하지 않습니다. PNG 저장 버튼을 이용해 주세요.')}};
+  $('saveScheduleImage').onclick=()=>{if(!scheduleCanvas)renderScheduleSharePreview();let a=document.createElement('a');a.download=scheduleFileName;a.href=scheduleCanvas.toDataURL('image/png');a.click()};
+})();
+</script>
 </body></html>
 
