@@ -281,7 +281,7 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
       let spread=map=>{let values=malePlayers.map(player=>map[player]);return values.length?Math.max(...values)-Math.min(...values):0};
       return spread(md)+spread(mx);
     }
-    // 하나의 4인 그룹에 대해: 최적 팀분할 + 통합 점수(구간화된 밸런스 우선, 그 안에서 재회피 결정)
+    // 하나의 4인 그룹에 대해: 최적 팀분할 + 통합 점수(동일 4인조 재편성 회피를 밸런스보다 우선)
     function bestCandidate(group){
       let type=typeOf(group);
       if(!type) return null;
@@ -298,8 +298,8 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
       let formatPenalty=maleFormatPenalty(group,type);
       let score = best.partnerRepeat*1e12 // 1순위: 파트너 중복 회피(가능하면 0회 강제)
           + formatPenalty*1e10        // 2순위: 남성 혼복·남복 횟수 균등
-          + tier*1e8                  // 3순위: 밸런스(구간)
-          + qRepeat*1e6               // 4순위: 동일 4인조 재편성 회피
+          + qRepeat*1e8               // 3순위: 동일 4인조 재편성 회피
+          + tier*1e6                  // 4순위: 밸런스(구간)
           + quartetMetSum(group)*10;  // 5순위: 4인 전체 접촉 이력 회피
       return {group,type,teams:best.teams,probability:best.probability,score};
     }
@@ -370,7 +370,7 @@ function decorateMemberGrades(){document.querySelectorAll('#playerRows tr').forE
     let counts=Object.entries(plays).sort((a,b)=>b[1]-a[1]).map(([p,c])=>`${esc(p)} ${c}경기`).join(' · ');
     let used=(rows.length?Math.max(...rows.map(r=>r.round)):0)*mins;
     let maleFormatSummary=malePlayers.map(player=>`${esc(player)} 혼복 ${mixedDoubles[player]}회 · 남복 ${maleDoubles[player]}회`).join('　');
-    $('scheduleSummary').innerHTML=`<p class="notice"><b>①인당 경기수 균등 → ②잡복 제외(남복·혼복·여복만) → ③남성 혼복·남복 횟수 균등 → ④랭킹 밸런스(구간화) → ⑤파트너·4인 조합 재회피(라운드 전체 최적화) · ${rows.length}경기 · 경기 ${used}분 + 마지막 휴식 ${restMins}분 / 총 ${totalMins}분</b><br><span class="schedule-balance">${counts}</span>${maleFormatSummary?`<br><span class="schedule-balance">남성 종목 배분: ${maleFormatSummary}</span>`:''}</p>${skippedCourts?`<p class="notice">성비/조합 문제로 편성 불가능한 코트 ${skippedCourts}회는 비워졌습니다.</p>`:''}`;
+    $('scheduleSummary').innerHTML=`<p class="notice"><b>①인당 경기수 균등 → ②잡복 제외(남복·혼복·여복만) → ③남성 혼복·남복 횟수 균등 → ④4인 조합 재회피 → ⑤랭킹 밸런스(구간화) · 파트너 중복 우선 회피(라운드 전체 최적화) · ${rows.length}경기 · 경기 ${used}분 + 마지막 휴식 ${restMins}분 / 총 ${totalMins}분</b><br><span class="schedule-balance">${counts}</span>${maleFormatSummary?`<br><span class="schedule-balance">남성 종목 배분: ${maleFormatSummary}</span>`:''}</p>${skippedCourts?`<p class="notice">성비/조합 문제로 편성 불가능한 코트 ${skippedCourts}회는 비워졌습니다.</p>`:''}`;
   };
 })();
 </script>
